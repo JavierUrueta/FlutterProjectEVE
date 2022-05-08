@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "971042292792",
+    "firebase_url": "https://myschoolagenda-448b9-default-rtdb.firebaseio.com",
+    "project_id": "myschoolagenda-448b9",
+    "storage_bucket": "myschoolagenda-448b9.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:971042292792:android:06fdc821bc737e1f8cd2cd",
+        "android_client_info": {
+          "package_name": "com.example.projectfinalmovil"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "971042292792-lbu7rdgjev88fpnr6b2stnraio2uh6mi.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBNonsx78VtzPGv0hCe7FOnZBd_OFL1wjA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "971042292792-lbu7rdgjev88fpnr6b2stnraio2uh6mi.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
