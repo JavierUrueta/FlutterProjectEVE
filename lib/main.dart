@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -24,21 +25,24 @@ class MyApp extends StatelessWidget {
 }
 
 class SubjectInfo {
-    late int id;
+    late String id;
     late String name, start, end;
     late Color color;
-    late List<double> ratings = [];
+    late int parciales;
+    late Map<String, String> ratings;
 
-    SubjectInfo(int _id, String _name, String _start, String _end, Color _color) {
-        id = _id;
+    SubjectInfo(String _name, int _parciales, String _start, String _end, Color _color) {
+        id = _name;
         name = _name;
         start = _start;
         end = _end;
         color = _color;
+        ratings = HashMap();
+        parciales = _parciales;
     }
 
-    setRating(double _rating) {
-        ratings.add(_rating);
+    setRating(int p, double prom) {
+        ratings.addAll({p.toString(): prom.toString()});
     }
 
     @override
@@ -46,33 +50,22 @@ class SubjectInfo {
         return "nombre: $name inicio: $start fin: $end color: $color ";
     }
 
-    String hashMapRatings() {
-        String map = "";
-        for (int i = 0; i < ratings.length; i++) {
-          if (i != ratings.length - 1) {
-            map += '${i+1}:${ratings[i]}, ';
-          }else{
-            map += '${i+1}:${ratings[i]}';
-          }
-        }
-        return map;
-    }
-
     HashMap<String, String> createDataforDatabase() {
-        final baseMap = <String, String>{'id': id.toString(), 'nombre': name, 'horaInicio': start, 'horaFin': end, 
-                                          'color': color.toString(), 'ratings': hashMapRatings()};
+        final baseMap = <String, String>{'id': id, 'nombre': name, 'horaInicio': start, 
+                                         'horaFin': end, 'parciales': parciales.toString(), 
+                                         'color': color.toString(),'ratings': jsonEncode(ratings)};
         final mapOf = HashMap<String, String>.of(baseMap);
         return mapOf;
     }
 }
 
 class ProfesorInfo {
-    late int id;
+    late String id;
     late String name, email, mate;
     late Color color;
 
-    ProfesorInfo(int _id, String _name, String _email, String _mate, Color _color) {
-        id = _id;
+    ProfesorInfo(String _name, String _email, String _mate, Color _color) {
+        id = _name;
         name = _name;
         email = _email;
         mate = _mate;
@@ -85,38 +78,53 @@ class ProfesorInfo {
     }
 
     HashMap<String, String> createDataforDatabase() {
-        final baseMap = <String, String>{'nombre': name, 'email': email, 'materia': mate, 'color': color.toString()};
+        final baseMap = <String, String>{'id': id,'nombre': name, 'email': email, 
+                                         'materia': mate, 'color': color.toString()};
         final mapOf = HashMap<String, String>.of(baseMap);
         return mapOf;
     }
 }
 
 class EventInfo {
-    late int id;
-    late String name, mate, dia, mes, anio;
-    late Color color;
+  late String id;
+  late String name, mate, dia, mes, anio;
+  late Color color;
+  late int isImportant;
+  EventInfo(String _name, String _mate, String _dia, String _mes, String _anio, Color _color) {
+      id = _name;
+      name = _name;
+      mate = _mate;
+      dia = _dia;
+      mes = _mes;
+      anio = _anio;
+      color = _color;
+      isImportant = setColorId();
+  }
 
-    EventInfo(int _id, String _name, String _mate, String _dia, String _mes, String _anio, Color _color) {
-        id = _id;
-        name = _name;
-        mate = _mate;
-        dia = _dia;
-        mes = _mes;
-        anio = _anio;
-        color = _color;
+  int setColorId() {
+    if(color == Colors.red) {
+      return 1;
+    } else{
+      if(color == Colors.yellow) {
+        return 2;
+      } else {
+        return 3;
+      }
     }
+    
+  }
 
-    @override
-    String toString() {
-        return "nombre: $name materia: $mate fecha: $dia / $mes / $anio color: $color ";
-    }
+  @override
+  String toString() {
+      return "nombre: $name materia: $mate fecha: $dia / $mes / $anio color: $color ";
+  }
 
-    HashMap<String, String> createDataforDatabase() {
-        final baseMap = <String, String>{'nombre': name, 'materia': mate, 'dia': dia, 
-                                         'mes': mes, 'anio': anio, 'color': color.toString()};
-        final mapOf = HashMap<String, String>.of(baseMap);
-        return mapOf;
-    }
+  HashMap<String, String> createDataforDatabase() {
+      final baseMap = <String, String>{'id': id,'nombre': name, 'materia': mate, 'dia': dia, 
+                                       'mes': mes, 'anio': anio, 'color': color.toString()};
+      final mapOf = HashMap<String, String>.of(baseMap);
+      return mapOf;
+  }
 }
 
 class Materia {
@@ -125,9 +133,9 @@ class Materia {
     int color = 0; //100-900
 
     Materia(String nom, int p, int c){
-        this.nombre = nom;
-        this.parciales = p;
-        this.color = c;
+        nombre = nom;
+        parciales = p;
+        color = c;
     }
 }
 
@@ -159,9 +167,6 @@ class _MyHomePageState extends State<MyHomePage> {
     
     @override
     Widget build(BuildContext context) {
-      initializeListsSubjects();
-      initializeListsEvents();
-      initializeListsProfesors();
         return DefaultTabController(
             length: 4,
             child: Scaffold(
@@ -187,64 +192,59 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
         );
     }
-    
-    initializeListsSubjects() async{
-      List<SubjectInfo> sjct = [];
 
-      await db.collection('Asignaturas').get().then((value) {
-        value.docs.forEach((element) {  
+    void InitializeList() {
+      List<SubjectInfo> s = [];
+      List<EventInfo> e = [];
+      List<ProfesorInfo> p = [];
+
+      db.collection('Asignaturas').get().then((value) {
+        value.docs.forEach((element) {
           String valueString = element.data()['color'].split('(0x')[1].split(')')[0]; // kind of hacky..
           int value = int.parse(valueString, radix: 16);
           Color color = Color(value);
-          final s = SubjectInfo(int.parse(element.data()['id']), element.data()['nombre'], 
-                                element.data()['horaInicio'], element.data()['horaFin'], color);
-          sjct.add(s);
+          s.add(SubjectInfo(element.data()['nombre'], int.parse(element.data()['parciales']), element.data()['horaInicio'], element.data()['horaFin'], color));
+          String r = jsonDecode(element.data()['ratings']);
+          print(r);
         });
+
+        if(s.isNotEmpty && subjects.isEmpty) {
+          setState(() => subjects = s );
+        }
       });
-
-      setState(() {
-        subjects = sjct;
-      });
-    }
-
-    initializeListsEvents() async{
-      List<EventInfo> event = [];
-
-      await db.collection('Eventos').get().then((value) {
-        value.docs.forEach((element) {  
+      db.collection('Eventos').get().then((value) {
+        value.docs.forEach((element) {
           String valueString = element.data()['color'].split('(0x')[1].split(')')[0]; // kind of hacky..
           int value = int.parse(valueString, radix: 16);
           Color color = Color(value);
-          final e = EventInfo(int.parse(element.data()['id']), element.data()['nombre'], element.data()['materia'], 
-                              element.data()['dia'], element.data()['mes'], element.data()['anio'], color);
-          event.add(e);
+          e.add(EventInfo(element.data()['nombre'], element.data()['materia'],
+                          element.data()['dia'], element.data()['mes'], element.data()['anio'], color));
         });
+
+        if(e.isNotEmpty && events.isEmpty) {
+          setState(() => events = e );
+        }
+
+        if(events.isNotEmpty) {
+          colorSort();
+        }
       });
-
-      setState(() {
-        events = event;
-      });
-    }
-
-    initializeListsProfesors() async{
-      List<ProfesorInfo> prof = [];
-
-      await db.collection('Profesores').get().then((value) {
-        value.docs.forEach((element) {  
+      db.collection('Profesores').get().then((value) {
+        value.docs.forEach((element) {
           String valueString = element.data()['color'].split('(0x')[1].split(')')[0]; // kind of hacky..
           int value = int.parse(valueString, radix: 16);
           Color color = Color(value);
-          final p = ProfesorInfo(int.parse(element.data()['id']), element.data()['nombre'], element.data()['email'], element.data()['materia'] ,color);
-          prof.add(p);
+          p.add(ProfesorInfo(element.data()['nombre'], element.data()['email'], element.data()['materia'], color)); 
         });
-      });
 
-      setState(() {
-        teachers = prof;
+        if(p.isNotEmpty && teachers.isEmpty) {
+          setState(() => teachers = p );
+        }
       });
     }
 
     Widget MySubjectPage() {
+      InitializeList();
         return Scaffold(
             body: ListView.builder(
                 itemCount: subjects.length,
@@ -274,7 +274,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: <Widget>[
                           TextButton(onPressed: () => {
-                            db.collection('Asignaturas').doc(subjects[index].id.toString()).delete(),
+                            db.collection('Asignaturas').doc(subjects[index].id).delete(),
                             setState(() {
                               subjects.removeAt(index);
                             }),
@@ -327,8 +327,11 @@ class _MyHomePageState extends State<MyHomePage> {
         double alturaColors = height * 0.6;
         double circleRad = height * 0.06;
         Color colorC = Colors.white;
-        String _name = "", _start = "", _end = "";
-        bool result = false;
+        String _name = "", _start = "07:00", _end = "07:00";
+        int _parcial = 0;
+        List<String> hrsList = ['07:00', '08:00', '09:00', '10:00', '11:00', '12:00', '13:00', 
+                                '14:00', '15:00', '16:00', '17:00', '18:00', '19:00', '20:00', 
+                                '21:00'];
         showDialog(
             context: context,
             builder: (context) => AlertDialog(
@@ -347,26 +350,95 @@ class _MyHomePageState extends State<MyHomePage> {
                                                     labelText: 'Materia *',
                                                 ),
                                                 onChanged: (String? value) {
-                                                    _name = value.toString();
+                                                    _name = value!;
                                                 }
                                             ),
                                             TextFormField(
                                                 decoration: const InputDecoration(
-                                                    icon: Icon(Icons.schedule),
-                                                    labelText: 'Hora de inicio * (00:00 am/pm)',
+                                                    icon: Icon(Icons.chevron_right),
+                                                    labelText: 'No Parciales *',
                                                 ),
                                                 onChanged: (String? value) {
-                                                    _start = value.toString();
+                                                    _parcial = int.parse(value!);
                                                 }
                                             ),
-                                            TextFormField(
-                                                decoration: const InputDecoration(
-                                                    icon: Icon(Icons.schedule),
-                                                    labelText: 'Hora de fin * (00:00 am/pm)',
+                                            Container(
+                                              padding: const EdgeInsets.only(top: 15),
+                                              child: Row(
+                                                children: const [
+                                                  Text(
+                                                    'Hora de inicio: ', 
+                                                    style: TextStyle(
+                                                      fontSize: 15,
+                                                      color: Color.fromARGB(255, 90, 90, 90),
+                                                      ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Row(
+                                              children: <Widget>[
+                                                const Icon(Icons.access_time),
+                                                Expanded(
+                                                  child: Container(
+                                                    padding: const EdgeInsets.only(left: 15),                                            
+                                                    child: DropdownButtonFormField<String>(
+                                                      value: _start,
+                                                      items: hrsList.map((String value){
+                                                        return DropdownMenuItem<String>(
+                                                          value: value,
+                                                          child: Text(value),
+                                                        );
+                                                      }).toList(),
+                                                      onChanged: (String? value) {
+                                                        setState(() => _start = value!);
+                                                      },
+                                                      onSaved: (String? value) {
+                                                        setState(() =>_start = value!);
+                                                      }
+                                                    ),
+                                                  ),
                                                 ),
-                                                onChanged: (String? value) {
-                                                    _end = value.toString();
-                                                }
+                                              ]
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.only(top: 15),
+                                              child: Row(
+                                                children: const [
+                                                  Text(
+                                                    'Hora de fin: ', 
+                                                    style: TextStyle(
+                                                      fontSize: 15,
+                                                      color: Color.fromARGB(255, 90, 90, 90),
+                                                    )
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Row(
+                                              children: <Widget>[
+                                                const Icon(Icons.access_time),
+                                                Expanded(
+                                                  child: Container(
+                                                    padding: const EdgeInsets.only(left: 15),                                            
+                                                    child: DropdownButtonFormField<String>(
+                                                      value: _end,
+                                                      items: hrsList.map((String value){
+                                                        return DropdownMenuItem<String>(
+                                                          value: value,
+                                                          child: Text(value),
+                                                        );
+                                                      }).toList(),
+                                                      onChanged: (String? value) {
+                                                        setState(() => _end = value!);
+                                                      },
+                                                      onSaved: (String? value) {
+                                                        setState(() =>_end = value!);
+                                                      }
+                                                    ),
+                                                  ),
+                                                ),
+                                              ]
                                             ),
                                         ],
                                     ),
@@ -514,11 +586,13 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
                     TextButton(
                         onPressed: () {
-                            if(_name.isNotEmpty && _start.isNotEmpty && _end.isNotEmpty) {
-                              final s = SubjectInfo(subjects.length + 1,_name, _start, _end, colorC);
-                              db.collection("Asignaturas").doc(s.id.toString()).set(s.createDataforDatabase());
-                            }
-                            Navigator.pop(context, 'Guardar');
+                          if(_name.isNotEmpty && _start.isNotEmpty && _end.isNotEmpty) {
+                            final s = SubjectInfo(_name, _parcial, _start, _end, colorC);
+                            s.setRating(1, 7.8);
+                            db.collection("Asignaturas").doc(s.id).set(s.createDataforDatabase());
+                            setState(() => subjects.add(s));
+                          }
+                          Navigator.pop(context, 'Guardar');
                         },
                         child: const Text('Guardar'),
                     ),
@@ -718,11 +792,12 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
           TextButton(
             onPressed: (() {
-                if (_name != "" && _email != "" && _mate != "") {
-                  final p = ProfesorInfo(teachers.length + 1, _name, _email, _mate, colorC);
-                  db.collection("Profesores").doc(p.id.toString()).set(p.createDataforDatabase());
-                }
-                Navigator.pop(context, 'Guardar');
+              if (_name != "" && _email != "" && _mate != "") {
+                final p = ProfesorInfo(_name, _email, _mate, colorC);
+                db.collection("Profesores").doc(p.id).set(p.createDataforDatabase());
+                setState(() => teachers.add(p));
+              }
+              Navigator.pop(context, 'Guardar');
             }),
               child: const Text('Guardar'),
             ),
@@ -732,55 +807,62 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Widget ProfesorPage() {
-        return Scaffold(
-        body: ListView.builder(
-            itemCount: teachers.length,
-            itemBuilder: (BuildContext context, int index) {
-                return Card(
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    color: teachers[index].color,
-                    margin: const EdgeInsets.only(top: 10, bottom: 10, right: 30, left: 30),
-                    elevation: 10,
-                    child: Column(
-                        children: <Widget>[
-                            ListTile(
-                                contentPadding: const EdgeInsets.fromLTRB(15, 10, 25, 0),
-                                title: Text(
-                                    teachers[index].name,
-                                    style: const TextStyle(fontSize: 30)
-                                ),
-                                subtitle: Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: Column(
-                                        children: <Widget>[
-                          Text(teachers[index].mate ,
-                            style: const TextStyle(height: 1.5, fontSize: 15),),
-
-                          Text(teachers[index].email,
-                            style: const TextStyle(height:1.5, fontSize: 15),),
-                        ])
-                    ),
-
-                    leading: const Icon(Icons.subject),
+    return Scaffold(
+      body: ListView.builder(
+        itemCount: teachers.length,
+        itemBuilder: (BuildContext context, int index) {
+          return Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            color: teachers[index].color,
+            margin: const EdgeInsets.only(top: 10, bottom: 10, right: 30, left: 30),
+            elevation: 10,
+            child: Column(
+            children: <Widget>[
+              ListTile(
+                contentPadding: const EdgeInsets.fromLTRB(25, 15, 25, 0),
+                  title: Text(
+                    teachers[index].name,
+                    style: const TextStyle(fontSize: 30)
                   ),
-
-                  Container(
-                      margin: const EdgeInsets.only(right: 20, bottom: 10),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: <Widget>[
-                          TextButton(onPressed: () => {
-                            setState(() {
-                              teachers.removeAt(index);
-                            }),
-                          }, child: const Text('Eliminar')),
-                        ],
-                      )
-                  )
-                ],
-              ),
-            );
-          }
+                  subtitle: Container(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Column(
+                      children: <Widget>[ 
+                        Row(
+                          children: <Widget>[
+                            Text(teachers[index].mate,
+                              style: const TextStyle(height:1.5, fontSize: 15)
+                            ),
+                          ],
+                        ),
+                        Row(
+                          children: <Widget>[
+                            Text(teachers[index].email,
+                              style: const TextStyle(height:1.5, fontSize: 15)
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                  margin: const EdgeInsets.only(right: 20, bottom: 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: <Widget>[
+                      TextButton(onPressed: () => {
+                        setState(() {
+                          teachers.removeAt(index);
+                        }),
+                      }, child: const Text('Eliminar')),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => NewProfessor(),
@@ -961,8 +1043,10 @@ class _MyHomePageState extends State<MyHomePage> {
           TextButton(
             onPressed: (() {
               if(_name != "" && _mate != "" && _dia != "" && _mes != "" && _anio != ""){
-                final e = EventInfo(events.length + 1, _name, _mate, _dia, _mes, _anio, colorC);
-                db.collection("Eventos").doc(e.id.toString()).set(e.createDataforDatabase());
+                final e = EventInfo(_name, _mate, _dia, _mes, _anio, colorC);
+                db.collection("Eventos").doc(e.id).set(e.createDataforDatabase());
+                setState(() => events.add(e));
+                colorSort();
               }
               Navigator.pop(context, 'Guardar');
             }),
@@ -971,6 +1055,20 @@ class _MyHomePageState extends State<MyHomePage> {
         ],
       ),
     );
+  }
+
+  void colorSort() {
+    List<EventInfo> e = events;
+    for(int i = 0; i < events.length; i++){
+      for(int j = 0; j < (events.length - i - 1); j++){
+        if(e[j].isImportant > e[j+1].isImportant) {
+          final ev = EventInfo(e[j].name, e[j].mate, e[j].dia, e[j].mes, e[j].anio, e[j].color);
+          e[j] = e[j+1];
+          e[j+1] = ev;
+        }
+      }
+    }
+    setState(() => events = e);
   }
 
 }
