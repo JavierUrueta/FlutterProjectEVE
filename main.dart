@@ -577,6 +577,23 @@ class _MyHomePageState extends State<MyHomePage> {
         );
     }
 
+    void bubbleSort(){
+        int i, j;
+        for(i = 0; i < subjects.length -1; i++){
+            for(j = 0; j < (subjects.length -i -1); j++){
+                var cad1 = subjects[j].start.substring(1,3);
+                var cad2 = subjects[j+1].start.substring(1,3);
+                int hr1 = int.parse(cad1);
+                int hr2 = int.parse(cad2);
+                if(hr1 > hr2){
+                    final temp = SubjectInfo(subjects[j].name, subjects[j].parciales, subjects[j].start, subjects[j].end, subjects[j].color);
+                    subjects[j] = subjects[j + 1];
+                    subjects[j + 1] = temp;
+                }
+            }
+        }
+    }
+    
     void NewProfessor() {
     double height = MediaQuery.of(context).size.width;
     double alturaColors = height * 0.6;
